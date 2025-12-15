@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>HABER</title>
+<meta name="application-name" content="HABER">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#222222">
+<style>
+  :root{
+    --bg:#f8f9fa;
+    --text:#222;
+    --muted:#6b7280;
+    --card:#fff;
+    --border: #e6e9ec;
+    --shadow: 0 6px 18px rgba(16,24,40,0.06);
+    --radius:14px;
+    --glass: rgba(255,255,255,0.6);
+  }
+  html,body{height:100%;margin:0;font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:var(--bg); color:var(--text);}
+  .app{
+    max-width:1000px;margin:28px auto;padding:18px;
+    display:flex;flex-direction:column;gap:20px;
+  }
+
+  /* Top bar */
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    background:transparent;padding:8px 6px;
+  }
+  .tabs{display:flex;gap:8px;align-items:center;}
+  .tab{
+    padding:8px 12px;border-radius:10px;border:1px solid transparent;cursor:pointer;
+    font-weight:500;color:var(--muted);transition:all .16s;
+    background:transparent;
+  }
+  .tab:hover{background:rgba(0,0,0,0.03);transform:translateY(-1px)}
+  .tab.active{color:var(--text);border-color:var(--border);background:var(--card);box-shadow:var(--shadow)}
+
+  .title{
+    position:absolute;left:50%;transform:translateX(-50%);
+    font-weight:600;letter-spacing:2px;
+  }
+
+  /* Layout */
+  .main{
+    display:grid;grid-template-columns:1fr;gap:18px;
+  }
+
+  .card{
+    background:var(--card);border-radius:var(--radius);padding:14px;border:1px solid var(--border);box-shadow:var(--shadow);
+  }
+
+  /* Journal layout */
+  .events-area textarea{
+    width:100%;min-height:72px;border-radius:10px;padding:12px;border:1px solid var(--border);resize:vertical;font-size:14px;background:transparent;
+    font-family:inherit;color:var(--text);
+  }
+
+  .days{
+    display:flex;flex-direction:column;gap:10px;margin-top:12px;
+  }
+  .day{
+    display:flex;gap:10px;align-items:flex-start;padding:12px;border-radius:12px;border:1px solid var(--border);background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.85));
+  }
+  .day-meta{width:110px;flex:0 0 110px;font-size:13px;color:var(--muted);}
+  .day-note{flex:1;}
+  .day-note textarea{width:100%;min-height:64px;border-radius:10px;padding:10px;border:1px solid var(--border);resize:vertical;font-family:inherit;color:var(--text);background:transparent}
+
+  /* Habits */
+  .habits{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .hab-list{display:flex;flex-direction:column;gap:8px}
+  .habit{
+    display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid var(--border);
+  }
+  .habit-name{display:flex;align-items:center;gap:10px;font-weight:500}
+  .checks{margin-left:auto;display:flex;gap:6px}
+  .checks button{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:14px}
+  .add-habit{margin-top:8px;display:flex;gap:8px;align-items:center}
+  .input, input[type="text"], input[type="date"], textarea {font-family:inherit;padding:8px;border-radius:8px;border:1px solid var(--border);background:transparent}
+
+  /* Reminders */
+  .reminders-list{display:flex;flex-direction:column;gap:8px;}
+  .reminder{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;border:1px solid var(--border)}
+  .reminder .text{flex:1}
+  .muted{color:var(--muted);font-size:13px}
+
+  /* compact graph canvas */
+  .chart-wrap{height:110px;padding:6px;border-radius:10px;border:1px solid var(--border);background:linear-gradient(180deg,#fff, #fbfdff);display:flex;align-items:center;justify-content:center}
+
+  /* Settings modal (center) */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(11,14,20,0.25);display:none;align-items:center;justify-content:center;z-index:50;}
+  .modal{width:640px;max-width:94%;background:var(--card);border-radius:12px;padding:18px;border:1px solid var(--border);box-shadow:var(--shadow);}
+  .modal h3{margin:0 0 10px 0}
+  .modal .row{display:flex;gap:10px;align-items:center;margin-top:12px}
+  .btn{padding:8px 10px;border-radius:10px;border:1px solid var(--border);cursor:pointer;background:transparent}
+  .btn.primary{background:var(--text);color:white;border-color:transparent}
+  .small{font-size:13px;padding:6px 8px;border-radius:8px}
+
+  /* responsive */
+  @media (max-width:720px){
+    .day-meta{width:88px;flex-basis:88px}
+    .checks button{width:26px;height:26px}
+  }
+
+  /* subtle hover */
+  button:hover,.tab:hover{transform:translateY(-1px)}
+  .top-actions{display:flex;gap:8px;align-items:center}
+  .inline-muted{color:var(--muted);font-size:13px}
+  .footer-note{font-size:13px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="app" role="application" aria-label="HABER Habit Tracker">
+
+  <header class="topbar" aria-hidden="false">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="journal" role="tab">Journal</button>
+      <button class="tab" data-tab="reminders" role="tab">Reminders</button>
+      <button class="tab" data-tab="settings" id="open-settings" role="button">⚙ Settings</button>
+    </div>
+
+    <div class="title" aria-hidden="true">HABER</div>
+
+    <div class="top-actions">
+      <div class="inline-muted">Auto-saves locally</div>
+    </div>
+  </header>
+
+  <main class="main" id="main-content">
+
+    <!-- Journal Card -->
+    <section class="card" id="journal-page" data-page="journal" role="region" aria-label="Journal">
+      <div class="events-area">
+        <label class="muted">Events This Week</label>
+        <textarea id="events" placeholder="Notes, events, quick thoughts..."></textarea>
+      </div>
+
+      <div class="days" id="days-container" aria-live="polite"></div>
+
+      <div class="card" style="margin-top:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;flex-direction:column">
+            <div style="font-weight:600">Habit Tracker</div>
+            <div class="muted" style="margin-top:4px;font-size:13px">Tap a day's checkbox to mark completion</div>
+          </div>
+          <div class="muted">Auto-saved</div>
+        </div>
+
+        <div class="habits" id="habits-section">
+          <div class="hab-list" id="hab-list"></div>
+
+          <div class="add-habit">
+            <input id="new-emoji" class="input" placeholder="Emoji" style="width:80px;text-align:center" maxlength="4">
+            <input id="new-habit" class="input" placeholder="New activity (e.g., Gym)" style="flex:1">
+            <button id="add-habit-btn" class="btn primary">➕ Add New Activity</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reminders Card -->
+    <section class="card" id="reminders-page" data-page="reminders" style="display:none" role="region" aria-label="Reminders">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <input id="rem-text" class="input" placeholder="Reminder text" style="flex:1">
+        <input id="rem-date" type="date" class="input" style="width:150px">
+        <button id="add-rem" class="btn primary">Add</button>
+      </div>
+
+      <div class="reminders-list card" id="reminders-list" style="padding:10px"></div>
+
+      <div style="margin-top:12px">
+        <div class="muted" style="margin-bottom:6px">Weekly progress</div>
+        <div class="chart-wrap">
+          <canvas id="progress-chart" width="680" height="90" aria-hidden="true"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div class="footer-note">Works fully offline — your data stays in your browser.</div>
+</div>
+
+<!-- Settings Modal (center modal) -->
+<div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal" role="document" aria-label="Settings">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Settings</h3>
+      <button class="btn" id="close-settings" aria-label="Close settings">✕</button>
+    </div>
+
+    <div style="margin-top:8px;color:var(--muted);font-size:13px">Backup & restore your HABER data locally.</div>
+
+    <div class="row">
+      <button id="backup-btn" class="btn">📤 Backup Data</button>
+      <span class="muted">Saves a .txt file containing your HABER data (JSON).</span>
+    </div>
+
+    <div class="row">
+      <input type="file" id="restore-file" accept=".txt,.json" class="small">
+      <button id="restore-file-btn" class="btn">📥 Restore from File</button>
+      <button id="paste-restore-btn" class="btn">📥 Paste / Paste & Restore</button>
+    </div>
+
+    <div style="margin-top:10px">
+      <label class="muted">Paste backup JSON below and click "Paste & Restore"</label>
+      <textarea id="paste-restore-area" style="width:100%;min-height:86px;border-radius:8px;padding:8px;border:1px solid var(--border);background:transparent;margin-top:6px;font-family:inherit"></textarea>
+    </div>
+
+    <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+      <button id="export-txt" class="btn">Export .txt (All Data)</button>
+      <button id="close-settings-2" class="btn">Close</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/*
+  HABER — Single-file app
+  - Center modal settings
+  - Local autosave to localStorage: key 'haber_state_v1'
+  - Weekly Journal (Mon-Sun): stores notes per ISO week (weekStart date)
+  - Habits with per-day check toggles
+  - Reminders (add/delete)
+  - Compact canvas line chart shows weekly habit completion counts
+  - Backup/Restore: download .txt and upload/paste JSON
+*/
+
+(() => {
+  // Utilities
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const STORAGE_KEY = 'haber_state_v1';
+
+  // date helpers (ISO week start Monday)
+  function startOfWeek(date){
+    const d = new Date(date);
+    const day = (d.getDay() + 6) % 7; // Monday=0
+    d.setDate(d.getDate() - day);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function fmtDate(d){
+    const y = d.getFullYear();const m = String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function dayNameFromIndex(i){
+    return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i];
+  }
+
+  // default initial state generator for current week
+  function defaultState(){
+    const now = new Date();
+    const weekStart = startOfWeek(now);
+    const days = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(weekStart); d.setDate(weekStart.getDate()+i);
+      days.push({date:fmtDate(d), dayName: dayNameFromIndex(i), notes:''});
+    }
+    // default habits (emoji + name)
+    const defaultHabits = [
+      {emoji:'🏋️',name:'Gym',checks: [false, false, false, false, false, false, false]},
+      {emoji:'📚',name:'Study',checks: [false, false, false, false, false, false, false]},
+      {emoji:'🛌',name:'Sleep by 11pm',checks: [false, false, false, false, false, false, false]},
+      {emoji:'💧',name:'Water 2L',checks: [false, false, false, false, false, false, false]},
+    ];
+    return {
+      weekStart: fmtDate(weekStart),
+      events: '',
+      days,
+      habits: defaultHabits,
+      reminders: []
+    };
+  }
+
+  // load & save
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      // If stored weekStart matches current weekStart, return; otherwise create new week and try to preserve any matching date notes
+      const curWeekStart = fmtDate(startOfWeek(new Date()));
+      if(parsed && parsed.weekStart === curWeekStart) return parsed;
+      // create new state but try to copy any entries that match dates in saved state
+      const base = defaultState();
+      if(parsed.days && Array.isArray(parsed.days)){
+        for(const d of parsed.days){
+          const idx = base.days.findIndex(x => x.date === d.date);
+          if(idx>=0) base.days[idx].notes = d.notes || base.days[idx].notes;
+        }
+      }
+      // restore events text if weekStart equal? if not, keep blank to avoid mixing weeks
+      // carry over habits and reminders from previous saved state
+      base.habits = parsed.habits || base.habits;
+      base.reminders = parsed.reminders || [];
+      base.events = parsed.events || '';
+      return base;
+    }catch(e){
+      console.error('Load failed', e);
+      return defaultState();
+    }
+  }
+
+  function saveState(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // tiny visual feedback could be added — omitted to keep UI minimal
+    }catch(e){
+      console.error('Save failed', e);
+    }
+  }
+
+  // debounce helper
+  function debounce(fn,wait=300){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),wait); }; }
+
+  // Application state
+  let state = loadState();
+
+  // DOM references
+  const tabs = $$('.tab');
+  const journalPage = $('#journal-page');
+  const remindersPage = $('#reminders-page');
+  const daysContainer = $('#days-container');
+  const eventsArea = $('#events');
+  const habList = $('#hab-list');
+  const newEmoji = $('#new-emoji');
+  const newHabit = $('#new-habit');
+  const addHabitBtn = $('#add-habit-btn');
+  const remindersList = $('#reminders-list');
+  const remText = $('#rem-text');
+  const remDate = $('#rem-date');
+  const addRemBtn = $('#add-rem');
+  const canvas = $('#progress-chart');
+  const modalBackdrop = $('#modal-backdrop');
+  const openSettingsBtn = $('#open-settings');
+  const closeSettingsBtn = $('#close-settings');
+  const closeSettingsBtn2 = $('#close-settings-2');
+  const backupBtn = $('#backup-btn');
+  const exportTxtBtn = $('#export-txt');
+  const restoreFile = $('#restore-file');
+  const restoreFileBtn = $('#restore-file-btn');
+  const pasteRestoreBtn = $('#paste-restore-btn');
+  const pasteRestoreArea = $('#paste-restore-area');
+
+  // Renderers
+  function renderDays(){
+    daysContainer.innerHTML = '';
+    state.days.forEach((d, idx) => {
+      const el = document.createElement('div');
+      el.className = 'day';
+      el.innerHTML = `
+        <div class="day-meta">
+          <div style="font-weight:600">${d.dayName}</div>
+          <div class="muted" style="margin-top:6px">${d.date}</div>
+        </div>
+        <div class="day-note">
+          <textarea data-day="${idx}" placeholder="Write notes for ${d.dayName}...">${escapeHtml(d.notes || '')}</textarea>
+        </div>
+      `;
+      daysContainer.appendChild(el);
+    });
+    // attach listeners
+    $$('textarea[data-day]').forEach(t => {
+      t.addEventListener('input', onDayNoteInput);
+    });
+  }
+
+  function escapeHtml(s){ return `${s}`.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function renderHabits(){
+    habList.innerHTML = '';
+    state.habits.forEach((h, hi) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'habit';
+      // checks for Mon-Sun
+      const checksHtml = h.checks.map((c, idx) => `<button data-h="${hi}" data-day="${idx}" class="check-btn"${c? ' style="background:rgba(34,34,34,0.9);color:#fff"':''}>${c? '✔':''}</button>`).join('');
+      wrap.innerHTML = `
+        <div class="habit-name"><div style="font-size:20px">${h.emoji || '•'}</div><div>${h.name}</div></div>
+        <div class="checks">${checksHtml} <button class="btn small" data-remove="${hi}" title="Remove habit">🗑</button></div>
+      `;
+      habList.appendChild(wrap);
+    });
+    // event delegates
+    $$('button.check-btn', habList).forEach(b => b.addEventListener('click', onHabitToggle));
+    $$('button[data-remove]', habList).forEach(b => b.addEventListener('click', onHabitRemove));
+  }
+
+  function renderReminders(){
+    remindersList.innerHTML = '';
+    if(state.reminders.length === 0){
+      remindersList.innerHTML = `<div class="muted">No reminders yet</div>`;
+      return;
+    }
+    state.reminders.forEach((r, idx) => {
+      const div = document.createElement('div');
+      div.className = 'reminder';
+      const dateStr = r.date ? `<div class="muted" style="font-size:13px">${r.date}</div>` : '';
+      div.innerHTML = `<div class="text">${escapeHtml(r.text)}</div>${dateStr}<button class="btn" data-rem="${idx}">Delete</button>`;
+      remindersList.appendChild(div);
+    });
+    $$('button[data-rem]', remindersList).forEach(b => b.addEventListener('click', (ev)=> {
+      const idx = Number(ev.currentTarget.dataset.rem);
+      state.reminders.splice(idx,1);
+      saveState();
+      renderReminders();
+      drawChart();
+    }));
+  }
+
+  // Chart: simple canvas line chart showing total completed checks per day across all habits
+  function drawChart(){
+    try{
+      const ctx = canvas.getContext('2d');
+      // compute counts per day
+      const counts = [0,0,0,0,0,0,0];
+      state.habits.forEach(h => {
+        h.checks.forEach((c,i) => { if(c) counts[i]++; });
+      });
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0,0,w,h);
+      // background grid subtle
+      ctx.strokeStyle = 'rgba(0,0,0,0.04)'; ctx.lineWidth = 1;
+      for(let i=0;i<4;i++){
+        const y = (i+1)*(h/5);
+        ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+      }
+      // axes labels (Mon..Sun)
+      ctx.fillStyle = 'rgba(34,34,34,0.7)'; ctx.font='11px system-ui';
+      const padLeft = 30, padRight = 10;
+      const plotW = w - padLeft - padRight;
+      const maxVal = Math.max(1, ...counts);
+      // points
+      const pts = counts.map((v,i) => {
+        const x = padLeft + (i/(6))*plotW;
+        const y = h - 18 - ( (v / maxVal) * (h - 40) );
+        return {x,y,v};
+      });
+      // line
+      ctx.beginPath();
+      ctx.lineWidth = 2; ctx.strokeStyle='rgba(34,34,34,0.9)';
+      pts.forEach((p,i)=> i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));
+      ctx.stroke();
+      // fill area
+      ctx.lineTo(pts[pts.length-1].x, h-18);
+      ctx.lineTo(pts[0].x, h-18);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(34,34,34,0.06)';
+      ctx.fill();
+
+      // dots & values
+      pts.forEach(p=> {
+        ctx.beginPath();
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'rgba(34,34,34,0.9)';
+        ctx.lineWidth = 1;
+        ctx.arc(p.x,p.y,4,0,Math.PI*2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(34,34,34,0.8)';
+        ctx.font='11px system-ui';
+        ctx.fillText(String(p.v), p.x-6, p.y-8);
+      });
+
+      // day labels
+      const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      ctx.fillStyle = 'rgba(34,34,34,0.6)'; ctx.font='11px system-ui';
+      labels.forEach((lb,i) => {
+        const x = padLeft + (i/(6))*plotW;
+        ctx.fillText(lb, x-10, h-2);
+      });
+
+    }catch(e){
+      console.error('Chart draw failed', e);
+    }
+  }
+
+  // Event handlers
+  const saveDebounced = debounce(()=>{ saveState(); drawChart(); }, 300);
+
+  function onDayNoteInput(ev){
+    const idx = Number(ev.target.dataset.day);
+    state.days[idx].notes = ev.target.value;
+    saveDebounced();
+  }
+
+  function onHabitToggle(ev){
+    const hidx = Number(ev.currentTarget.dataset.h);
+    const dayIdx = Number(ev.currentTarget.dataset.day);
+    state.habits[hidx].checks[dayIdx] = !state.habits[hidx].checks[dayIdx];
+    saveState();
+    renderHabits();
+    drawChart();
+  }
+
+  function onHabitRemove(ev){
+    const idx = Number(ev.currentTarget.dataset.remove);
+    if(!confirm('Remove this habit?')) return;
+    state.habits.splice(idx,1);
+    saveState();
+    renderHabits();
+    drawChart();
+  }
+
+  addHabitBtn.addEventListener('click', ()=>{
+    const emoji = newEmoji.value.trim() || '•';
+    const name = newHabit.value.trim() || 'New Activity';
+    state.habits.push({emoji,name,checks:[false,false,false,false,false,false,false]});
+    newEmoji.value=''; newHabit.value='';
+    saveState();
+    renderHabits();
+    drawChart();
+  });
+
+  // allow Enter to add habit
+  newHabit.addEventListener('keydown', (e)=> { if(e.key==='Enter'){ addHabitBtn.click(); e.preventDefault(); }});
+
+  addRemBtn.addEventListener('click', ()=>{
+    const text = remText.value.trim();
+    const dateVal = remDate.value || '';
+    if(!text) return;
+    state.reminders.push({text,date:dateVal});
+    remText.value=''; remDate.value='';
+    saveState();
+    renderReminders();
+  });
+
+  // events area
+  eventsArea.value = state.events || '';
+  eventsArea.addEventListener('input', () => {
+    state.events = eventsArea.value;
+    saveDebounced();
+  });
+
+  // tabs
+  tabs.forEach(t => t.addEventListener('click', (ev)=>{
+    const tab = ev.currentTarget.dataset.tab;
+    tabs.forEach(x=>x.classList.remove('active'));
+    ev.currentTarget.classList.add('active');
+    if(tab==='journal'){
+      journalPage.style.display = ''; remindersPage.style.display='none';
+    } else if(tab==='reminders'){
+      journalPage.style.display = 'none'; remindersPage.style.display='';
+      drawChart();
+    } else if(tab==='settings'){
+      openSettings();
+      // keep previous active tab visible
+      document.querySelector('.tab.active').classList.remove('active');
+      // reselect the tab that was active earlier (safe fallback)
+      tabs[0].classList.add('active');
+    }
+  }));
+
+  // Modal controls (center modal)
+  function openSettings(){
+    modalBackdrop.style.display = 'flex';
+    modalBackdrop.setAttribute('aria-hidden','false');
+  }
+  function closeSettings(){
+    modalBackdrop.style.display = 'none';
+    modalBackdrop.setAttribute('aria-hidden','true');
+  }
+  openSettingsBtn.addEventListener('click', openSettings);
+  closeSettingsBtn.addEventListener('click', closeSettings);
+  closeSettingsBtn2.addEventListener('click', closeSettings);
+  modalBackdrop.addEventListener('click', (e)=>{
+    if(e.target === modalBackdrop) closeSettings();
+  });
+
+  // Backup: download .txt file
+  function download(filename, text){
+    const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 500);
+  }
+  backupBtn.addEventListener('click', ()=>{
+    const data = JSON.stringify(state, null, 2);
+    const fname = `haber-backup-${state.weekStart || 'week'}.txt`;
+    download(fname, data);
+  });
+  exportTxtBtn.addEventListener('click', ()=> backupBtn.click());
+
+  // Restore from file input
+  restoreFileBtn.addEventListener('click', ()=>{
+    const f = restoreFile.files[0];
+    if(!f) return alert('Choose a .txt or .json backup file first.');
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      try{
+        const obj = JSON.parse(ev.target.result);
+        if(confirm('Restore backup? This will replace current data.')) {
+          state = obj;
+          saveState();
+          reloadUI();
+          closeSettings();
+        }
+      }catch(e){
+        alert('Invalid backup file.');
+      }
+    };
+    reader.readAsText(f);
+  });
+
+  // Paste restore
+  pasteRestoreBtn.addEventListener('click', ()=>{
+    const txt = pasteRestoreArea.value.trim();
+    if(!txt) return alert('Paste backup text in the box first.');
+    try{
+      const obj = JSON.parse(txt);
+      if(confirm('Restore from pasted backup? This will replace current data.')) {
+        state = obj;
+        saveState();
+        reloadUI();
+        closeSettings();
+      }
+    }catch(e){
+      alert('Invalid JSON pasted. Please paste the JSON produced by the backup.');
+    }
+  });
+
+  // small helper to reload UI after state replace
+  function reloadUI(){
+    eventsArea.value = state.events || '';
+    renderDays();
+    renderHabits();
+    renderReminders();
+    drawChart();
+  }
+
+  // initial render
+  renderDays();
+  renderHabits();
+  renderReminders();
+  drawChart();
+
+  // autosave on unload
+  window.addEventListener('beforeunload', () => saveState());
+
+  // small accessibility: keyboard shortcut "S" to open settings
+  window.addEventListener('keydown', (e)=>{
+    if((e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey)){
+      e.preventDefault(); openSettings();
+    }
+  });
+
+  // expose a quick debug console getter (for advanced users)
+  window._haber_state = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+  // END
+})();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js");
+  }
+</script>
+</body>
+</html>
